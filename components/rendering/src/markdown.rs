@@ -1,5 +1,9 @@
 use pulldown_cmark as cmark;
 use slug::slugify;
+use std::{
+    io::Write,
+    process::{Child, Command, Stdio},
+};
 use syntect::easy::HighlightLines;
 use syntect::html::{
     start_highlighted_html_snippet, styled_line_to_highlighted_html, IncludeBackground,
@@ -152,6 +156,7 @@ pub fn markdown_to_html(content: &str, context: &RenderContext) -> Result<Render
 
     let mut background = IncludeBackground::Yes;
     let mut highlighter: Option<(HighlightLines, bool)> = None;
+    let mut external: Option<Child> = None;
 
     let mut inserted_anchors: Vec<String> = vec![];
     let mut headings: Vec<Heading> = vec![];
@@ -166,7 +171,7 @@ pub fn markdown_to_html(content: &str, context: &RenderContext) -> Result<Render
     {
         let mut events = Parser::new_ext(content, opts)
             .map(|event| {
-                match event {
+                Ok(match event {
                     Event::Text(text) => {
                         // if we are in the middle of a code block
                         if let Some((ref mut highlighter, in_extra)) = highlighter {
@@ -183,15 +188,38 @@ pub fn markdown_to_html(content: &str, context: &RenderContext) -> Result<Render
                             };
                             //let highlighted = &highlighter.highlight(&text, ss);
                             let html = styled_line_to_highlighted_html(&highlighted, background);
-                            return Event::Html(html.into());
+                            Event::Html(html.into())
+                        } else if let Some(external) = external.as_mut() {
+                            external.stdin.as_mut().unwrap().write_all(text.as_bytes())?;
+                            Event::Text("".into())
+                        } else {
+                            // Business as usual
+                            Event::Text(text)
                         }
-
-                        // Business as usual
-                        Event::Text(text)
                     }
                     Event::Start(Tag::CodeBlock(ref info)) => {
                         if !context.config.highlight_code {
-                            return Event::Html("<pre><code>".into());
+                            return Ok(Event::Html("<pre><code>".into()));
+                        }
+
+                        if context.config.allow_external && info.starts_with("external ") {
+                            let cmd = &info[9..];
+                            external = Some(if cfg!(target_os = "windows") {
+                                Command::new("cmd")
+                                    .arg("/C")
+                                    .arg(cmd)
+                                    .stdin(Stdio::piped())
+                                    .stdout(Stdio::piped())
+                                    .spawn()?
+                            } else {
+                                Command::new("sh")
+                                    .arg("-c")
+                                    .arg(cmd)
+                                    .stdin(Stdio::piped())
+                                    .stdout(Stdio::piped())
+                                    .spawn()?
+                            });
+                            return Ok(Event::Text("".into()));
                         }
 
                         let theme = &THEME_SET.themes[&context.config.highlight_theme];
@@ -207,16 +235,27 @@ pub fn markdown_to_html(content: &str, context: &RenderContext) -> Result<Render
                     }
                     Event::End(Tag::CodeBlock(_)) => {
                         if !context.config.highlight_code {
-                            return Event::Html("</code></pre>\n".into());
+                            Event::Html("</code></pre>\n".into())
+                        } else if let Some(external) = external.take() {
+                            // wait closes stdin for us
+                            let output = external.wait_with_output()?;
+                            if !output.status.success() {
+                                return Err(
+                                    format!("external exited with code {}", output.status).into()
+                                );
+                            }
+
+                            Event::Html(String::from_utf8_lossy(&output.stdout).into_owned().into())
+                        } else {
+                            // reset highlight and close the code block
+                            highlighter = None;
+                            Event::Html("</pre>".into())
                         }
-                        // reset highlight and close the code block
-                        highlighter = None;
-                        Event::Html("</pre>".into())
                     }
                     Event::Start(Tag::Image(link_type, src, title)) => {
                         if is_colocated_asset_link(&src) {
                             let link = format!("{}{}", context.current_page_permalink, &*src);
-                            return Event::Start(Tag::Image(link_type, link.into(), title));
+                            return Ok(Event::Start(Tag::Image(link_type, link.into(), title)));
                         }
 
                         Event::Start(Tag::Image(link_type, src, title))
@@ -232,7 +271,7 @@ pub fn markdown_to_html(content: &str, context: &RenderContext) -> Result<Render
                             Ok(fixed_link) => fixed_link,
                             Err(err) => {
                                 error = Some(err);
-                                return Event::Html("".into());
+                                return Ok(Event::Html("".into()));
                             }
                         };
 
@@ -243,9 +282,9 @@ pub fn markdown_to_html(content: &str, context: &RenderContext) -> Result<Render
                         Event::Html(CONTINUE_READING.into())
                     }
                     _ => event,
-                }
+                })
             })
-            .collect::<Vec<_>>(); // We need to collect the events to make a second pass
+            .collect::<Result<Vec<_>>>()?; // We need to collect the events to make a second pass
 
         let mut heading_refs = get_heading_refs(&events);
 
@@ -275,8 +314,9 @@ pub fn markdown_to_html(content: &str, context: &RenderContext) -> Result<Render
             let start_idx = heading_ref.start_idx;
             let end_idx = heading_ref.end_idx;
             let title = get_text(&events[start_idx + 1..end_idx]);
-            let id =
-                heading_ref.id.unwrap_or_else(|| find_anchor(&inserted_anchors, slugify(&title), 0));
+            let id = heading_ref
+                .id
+                .unwrap_or_else(|| find_anchor(&inserted_anchors, slugify(&title), 0));
             inserted_anchors.push(id.clone());
 
             // insert `id` to the tag
@@ -305,7 +345,8 @@ pub fn markdown_to_html(content: &str, context: &RenderContext) -> Result<Render
 
             // record heading to make table of contents
             let permalink = format!("{}#{}", context.current_page_permalink, id);
-            let h = Heading { level: heading_ref.level, id, permalink, title, children: Vec::new() };
+            let h =
+                Heading { level: heading_ref.level, id, permalink, title, children: Vec::new() };
             headings.push(h);
         }
 

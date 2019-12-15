@@ -7,8 +7,8 @@ use syntect::parsing::{SyntaxSet, SyntaxSetBuilder};
 use toml;
 use toml::Value as Toml;
 
-use errors::Result;
 use errors::Error;
+use errors::Result;
 use highlighting::THEME_SET;
 use theme::Theme;
 use utils::fs::read_file_with_error;
@@ -86,7 +86,7 @@ impl Default for Taxonomy {
     }
 }
 
-type TranslateTerm  = HashMap<String, String>;
+type TranslateTerm = HashMap<String, String>;
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(default)]
@@ -120,6 +120,9 @@ pub struct Config {
     /// Which themes to use for code highlighting. See Readme for supported themes
     /// Defaults to "base16-ocean-dark"
     pub highlight_theme: String,
+
+    /// Whether to allow external programs to be applied to marked code blocks. Defaults to false
+    pub allow_external: bool,
 
     /// Whether to generate RSS. Defaults to false
     pub generate_rss: bool,
@@ -317,9 +320,16 @@ impl Config {
             Error::msg(format!("Translation for language '{}' is missing", lang.as_ref()))
         })?;
 
-        terms.get(key.as_ref()).ok_or_else(|| {
-            Error::msg(format!("Translation key '{}' for language '{}' is missing", key.as_ref(), lang.as_ref()))
-        }).map(|term| term.to_string())
+        terms
+            .get(key.as_ref())
+            .ok_or_else(|| {
+                Error::msg(format!(
+                    "Translation key '{}' for language '{}' is missing",
+                    key.as_ref(),
+                    lang.as_ref()
+                ))
+            })
+            .map(|term| term.to_string())
     }
 }
 
@@ -332,6 +342,7 @@ impl Default for Config {
             theme: None,
             highlight_code: false,
             highlight_theme: "base16-ocean-dark".to_string(),
+            allow_external: false,
             default_language: "en".to_string(),
             languages: Vec::new(),
             generate_rss: false,
