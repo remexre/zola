@@ -202,23 +202,23 @@ pub fn markdown_to_html(content: &str, context: &RenderContext) -> Result<Render
                             return Ok(Event::Html("<pre><code>".into()));
                         }
 
-                        if context.config.allow_external && info.starts_with("external ") {
-                            let cmd = &info[9..];
-                            external = Some(if cfg!(target_os = "windows") {
-                                Command::new("cmd")
-                                    .arg("/C")
-                                    .arg(cmd)
-                                    .stdin(Stdio::piped())
-                                    .stdout(Stdio::piped())
-                                    .spawn()?
+                        if let Some(cmd) = context.config.external_highlighters.get(info.as_ref()) {
+                            let (exec, arg1) = if cfg!(target_os = "windows") {
+                                ("cmd", "/C")
                             } else {
-                                Command::new("sh")
-                                    .arg("-c")
+                                ("sh", "-c")
+                            };
+                            external = Some(
+                                Command::new(exec)
+                                    .arg(arg1)
                                     .arg(cmd)
+                                    .env("ZOLA_BASE_URL", &context.config.base_url)
+                                    .env("ZOLA_CURRENT_PAGE", &context.current_page_permalink)
+                                    .env("ZOLA_OUTPUT_DIR", &context.output_dir)
                                     .stdin(Stdio::piped())
                                     .stdout(Stdio::piped())
-                                    .spawn()?
-                            });
+                                    .spawn()?,
+                            );
                             return Ok(Event::Text("".into()));
                         }
 

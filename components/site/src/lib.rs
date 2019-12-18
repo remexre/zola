@@ -482,6 +482,7 @@ impl Site {
         let permalinks = &self.permalinks;
         let tera = &self.tera;
         let config = &self.config;
+        let output_path = &self.output_path;
 
         // This is needed in the first place because of silly borrow checker
         let mut pages_insert_anchors = HashMap::new();
@@ -500,7 +501,7 @@ impl Site {
             .par_iter_mut()
             .map(|page| {
                 let insert_anchor = pages_insert_anchors[&page.file.path];
-                page.render_markdown(permalinks, tera, config, insert_anchor)
+                page.render_markdown(permalinks, tera, config, insert_anchor, output_path)
             })
             .collect::<Result<()>>()?;
 
@@ -509,7 +510,7 @@ impl Site {
             .values_mut()
             .collect::<Vec<_>>()
             .par_iter_mut()
-            .map(|section| section.render_markdown(permalinks, tera, config))
+            .map(|section| section.render_markdown(permalinks, tera, config, output_path))
             .collect::<Result<()>>()?;
 
         Ok(())
@@ -566,7 +567,13 @@ impl Site {
         if render {
             let insert_anchor =
                 self.find_parent_section_insert_anchor(&page.file.parent, &page.lang);
-            page.render_markdown(&self.permalinks, &self.tera, &self.config, insert_anchor)?;
+            page.render_markdown(
+                &self.permalinks,
+                &self.tera,
+                &self.config,
+                insert_anchor,
+                &self.output_path,
+            )?;
         }
         let mut library = self.library.write().expect("Get lock for add_page");
         let prev = library.remove_page(&page.file.path);
@@ -582,7 +589,12 @@ impl Site {
     pub fn add_section(&mut self, mut section: Section, render: bool) -> Result<Option<Section>> {
         self.permalinks.insert(section.file.relative.clone(), section.permalink.clone());
         if render {
-            section.render_markdown(&self.permalinks, &self.tera, &self.config)?;
+            section.render_markdown(
+                &self.permalinks,
+                &self.tera,
+                &self.config,
+                &self.output_path,
+            )?;
         }
         let mut library = self.library.write().expect("Get lock for add_section");
         let prev = library.remove_section(&section.file.path);
