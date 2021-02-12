@@ -12,12 +12,12 @@ use syntect::html::{
 use config::highlighting::{get_highlighter, SYNTAX_SET, THEME_SET};
 use context::RenderContext;
 use errors::{Error, Result};
-use front_matter::InsertAnchor;
+use front_matter::{InsertAnchor, RenderFrontMatter};
 use table_of_contents::{make_table_of_contents, Heading};
 use utils::site::resolve_internal_link;
 use utils::vec::InsertMany;
 
-use self::cmark::{Event, LinkType, Options, Parser, Tag};
+use self::cmark::{CowStr, Event, LinkType, Options, Parser, Tag};
 
 const CONTINUE_READING: &str =
     "<p id=\"zola-continue-reading\"><a name=\"continue-reading\"></a></p>\n";
@@ -148,7 +148,11 @@ fn get_heading_refs(events: &[Event]) -> Vec<HeadingRef> {
     heading_refs
 }
 
-pub fn markdown_to_html(content: &str, context: &RenderContext) -> Result<Rendered> {
+pub fn markdown_to_html(
+    content: &str,
+    context: &RenderContext,
+    front_matter: &RenderFrontMatter,
+) -> Result<Rendered> {
     // the rendered html
     let mut html = String::with_capacity(content.len());
     // Set while parsing
@@ -170,6 +174,18 @@ pub fn markdown_to_html(content: &str, context: &RenderContext) -> Result<Render
 
     {
         let mut events = Parser::new_ext(content, opts)
+            .map(|event| {
+                if let Some(info) = front_matter.quotes_to_code.as_ref() {
+                    let info = CowStr::from(info as &str);
+                    match event {
+                        Event::Start(Tag::BlockQuote) => Event::Start(Tag::CodeBlock(info)),
+                        Event::End(Tag::BlockQuote) => Event::End(Tag::CodeBlock(info)),
+                        event => event,
+                    }
+                } else {
+                    event
+                }
+            })
             .map(|event| {
                 Ok(match event {
                     Event::Text(text) => {
@@ -251,6 +267,11 @@ pub fn markdown_to_html(content: &str, context: &RenderContext) -> Result<Render
                             highlighter = None;
                             Event::Html("</pre>".into())
                         }
+                    }
+                    Event::Start(Tag::Paragraph) | Event::End(Tag::Paragraph)
+                        if highlighter.is_some() || external.is_some() =>
+                    {
+                        Event::Text("".into())
                     }
                     Event::Start(Tag::Image(link_type, src, title)) => {
                         if is_colocated_asset_link(&src) {

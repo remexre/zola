@@ -5,7 +5,7 @@ use toml;
 
 use errors::Result;
 
-use super::{InsertAnchor, SortBy};
+use super::{InsertAnchor, RenderFrontMatter, SortBy};
 
 static DEFAULT_PAGINATE_PATH: &str = "page";
 
@@ -17,6 +17,8 @@ pub struct SectionFrontMatter {
     pub title: Option<String>,
     /// Description in <meta> that appears when linked, e.g. on twitter
     pub description: Option<String>,
+    /// Properties for rendering
+    pub render_options: RenderFrontMatter,
     /// Whether to sort by "date", "order", "weight" or "none". Defaults to `none`.
     #[serde(skip_serializing)]
     pub sort_by: SortBy,
@@ -90,6 +92,7 @@ impl Default for SectionFrontMatter {
         SectionFrontMatter {
             title: None,
             description: None,
+            render_options: RenderFrontMatter::default(),
             sort_by: SortBy::None,
             weight: 0,
             template: None,

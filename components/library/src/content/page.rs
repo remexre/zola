@@ -271,9 +271,11 @@ impl Page {
 
         context.tera_context.insert("page", &SerializingPage::from_page_basic(self, None));
 
-        let res = render_content(&self.raw_content, &context).map_err(|e| {
-            Error::chain(format!("Failed to render content of {}", self.file.path.display()), e)
-        })?;
+        let res = render_content(&self.raw_content, &context, &self.meta.render_options).map_err(
+            |e| {
+                Error::chain(format!("Failed to render content of {}", self.file.path.display()), e)
+            },
+        )?;
 
         self.summary = res.summary_len.map(|l| res.body[0..l].to_owned());
         self.content = res.body;

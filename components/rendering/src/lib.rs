@@ -30,16 +30,21 @@ mod table_of_contents;
 use errors::Result;
 
 pub use context::RenderContext;
+use front_matter::RenderFrontMatter;
 use markdown::markdown_to_html;
 pub use shortcode::render_shortcodes;
 pub use table_of_contents::Heading;
 
-pub fn render_content(content: &str, context: &RenderContext) -> Result<markdown::Rendered> {
+pub fn render_content(
+    content: &str,
+    context: &RenderContext,
+    front_matter: &RenderFrontMatter,
+) -> Result<markdown::Rendered> {
     // Don't do shortcodes if there is nothing like a shortcode in the content
     if content.contains("{{") || content.contains("{%") {
         let rendered = render_shortcodes(content, context)?;
-        return markdown_to_html(&rendered, context);
+        return markdown_to_html(&rendered, context, front_matter);
     }
 
-    markdown_to_html(&content, context)
+    markdown_to_html(&content, context, front_matter)
 }

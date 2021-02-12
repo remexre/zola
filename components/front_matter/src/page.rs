@@ -7,6 +7,8 @@ use toml;
 use errors::Result;
 use utils::de::{fix_toml_dates, from_toml_datetime};
 
+use crate::RenderFrontMatter;
+
 /// The front matter of every page
 #[derive(Debug, Clone, PartialEq, Deserialize)]
 #[serde(default)]
@@ -38,6 +40,8 @@ pub struct PageFrontMatter {
     pub order: Option<usize>,
     /// Integer to use to order content. Highest is at the bottom, lowest first
     pub weight: Option<usize>,
+    /// Properties for rendering
+    pub render_options: RenderFrontMatter,
     /// All aliases for that page. Zola will create HTML templates that will
     /// redirect to this
     #[serde(skip_serializing)]
@@ -127,6 +131,7 @@ impl Default for PageFrontMatter {
             taxonomies: HashMap::new(),
             order: None,
             weight: None,
+            render_options: RenderFrontMatter::default(),
             aliases: Vec::new(),
             in_search_index: true,
             template: None,

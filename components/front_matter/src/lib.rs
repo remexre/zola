@@ -17,9 +17,11 @@ use regex::Regex;
 use std::path::Path;
 
 mod page;
+mod render;
 mod section;
 
 pub use page::PageFrontMatter;
+pub use render::RenderFrontMatter;
 pub use section::SectionFrontMatter;
 
 lazy_static! {

@@ -200,9 +200,11 @@ impl Section {
 
         context.tera_context.insert("section", &SerializingSection::from_section_basic(self, None));
 
-        let res = render_content(&self.raw_content, &context).map_err(|e| {
-            Error::chain(format!("Failed to render content of {}", self.file.path.display()), e)
-        })?;
+        let res = render_content(&self.raw_content, &context, &self.meta.render_options).map_err(
+            |e| {
+                Error::chain(format!("Failed to render content of {}", self.file.path.display()), e)
+            },
+        )?;
         self.content = res.body;
         self.toc = res.toc;
         self.external_links = res.external_links;
