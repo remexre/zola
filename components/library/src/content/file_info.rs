@@ -59,9 +59,9 @@ impl FileInfo {
         let mut components =
             find_content_components(&file_path.strip_prefix(base_path).unwrap_or(&file_path));
         let relative = if !components.is_empty() {
-            format!("{}/{}.md", components.join("/"), name)
+            PathBuf::from(components.join("/")).join(path.file_name().unwrap())
         } else {
-            format!("{}.md", name)
+            PathBuf::from(path.file_name().unwrap())
         };
 
         // If we have a folder with an asset, don't consider it as a component
@@ -82,7 +82,7 @@ impl FileInfo {
             parent,
             name,
             components,
-            relative,
+            relative: relative.to_string_lossy().to_string(),
         }
     }
 

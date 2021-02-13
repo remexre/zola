@@ -101,7 +101,8 @@ fn fix_link(
                 resolved.permalink
             }
             Err(_) => {
-                return Err(format!("Relative link {} not found.", link).into());
+                panic!("{:?}", &context.permalinks);
+                // return Err(format!("Relative link {} not found.", link).into());
             }
         }
     } else if is_colocated_asset_link(&link) {

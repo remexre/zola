@@ -182,14 +182,16 @@ impl Site {
         self.output_path = path.as_ref().to_path_buf();
     }
 
-    /// Reads all .md files in the `content` directory and create pages/sections
+    /// Reads all .md and .lhs files in the `content` directory and create pages/sections
     /// out of them
     pub fn load(&mut self) -> Result<()> {
         let base_path = self.base_path.to_string_lossy().replace("\\", "/");
-        let content_glob = format!("{}/{}", base_path, "content/**/*.md");
+        let content_glob_md = format!("{}/{}", base_path, "content/**/*.md");
+        let content_glob_lhs = format!("{}/{}", base_path, "content/**/*.lhs");
 
-        let (section_entries, page_entries): (Vec<_>, Vec<_>) = glob(&content_glob)
+        let (section_entries, page_entries): (Vec<_>, Vec<_>) = glob(&content_glob_md)
             .expect("Invalid glob")
+            .chain(glob(&content_glob_lhs).expect("Invalid glob"))
             .filter_map(|e| e.ok())
             .filter(|e| !e.as_path().file_name().unwrap().to_str().unwrap().starts_with('.'))
             .partition(|entry| {
