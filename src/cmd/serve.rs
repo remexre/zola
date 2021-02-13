@@ -54,7 +54,6 @@ enum ChangeKind {
     Templates,
     Themes,
     StaticFiles,
-    Sass,
     Config,
 }
 
@@ -193,9 +192,6 @@ pub fn serve(
             .map_err(|e| ZolaError::chain("Can't watch the `themes` folder.", e))?;
     }
 
-    // Sass support is optional so don't make it an error to no have a sass folder
-    let _ = watcher.watch("sass/", RecursiveMode::Recursive);
-
     let ws_address = format!("{}:{}", interface, site.live_reload.unwrap());
     let output_path = Path::new(output_dir).to_path_buf();
 
@@ -298,20 +294,6 @@ pub fn serve(
         rebuild_done_handling(&broadcaster, rebuild::after_template_change(site, &path), "/x.js");
     };
 
-    let reload_sass = |site: &Site, path: &Path, partial_path: &Path| {
-        let msg = if path.is_dir() {
-            format!("-> Directory in `sass` folder changed {}", path.display())
-        } else {
-            format!("-> Sass file changed {}", path.display())
-        };
-        console::info(&msg);
-        rebuild_done_handling(
-            &broadcaster,
-            site.compile_sass(&site.base_path),
-            &partial_path.to_string_lossy(),
-        );
-    };
-
     let copy_static = |site: &Site, path: &Path, partial_path: &Path| {
         // Do nothing if the file/dir was deleted
         if !path.exists() {
@@ -379,7 +361,6 @@ pub fn serve(
                             }
                             ChangeKind::Templates => reload_templates(&mut site, &path),
                             ChangeKind::StaticFiles => copy_static(&site, &path, &partial_path),
-                            ChangeKind::Sass => reload_sass(&site, &path, &partial_path),
                             ChangeKind::Themes => {
                                 console::info(
                                     "-> Themes changed. The whole site will be reloaded.",
@@ -440,7 +421,6 @@ pub fn serve(
                             }
                             (ChangeKind::Templates, _) => reload_templates(&mut site, &path),
                             (ChangeKind::StaticFiles, p) => copy_static(&site, &path, &p),
-                            (ChangeKind::Sass, p) => reload_sass(&site, &path, &p),
                             (ChangeKind::Themes, _) => {
                                 console::info(
                                     "-> Themes changed. The whole site will be reloaded.",
@@ -529,8 +509,6 @@ fn detect_change_kind(pwd: &Path, path: &Path) -> (ChangeKind, PathBuf) {
         ChangeKind::Content
     } else if partial_path.starts_with("/static") {
         ChangeKind::StaticFiles
-    } else if partial_path.starts_with("/sass") {
-        ChangeKind::Sass
     } else if partial_path == Path::new("/config.toml") {
         ChangeKind::Config
     } else {
